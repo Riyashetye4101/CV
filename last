@@ -1,0 +1,63 @@
+#include <stdio.h>
+#include <cuda_runtime.h>
+
+#define N 1024 // Length of the vectors
+
+__global__ void add_vectors(float *a, float *b, float *c) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < N) {
+    c[tid] = a[tid] + b[tid];
+  }
+}
+
+int main() {
+  float *a, *b, *c; // Host vectors
+  float *d_a, *d_b, *d_c; // Device vectors
+  int size = N * sizeof(float);
+
+  // Allocate memory on the host
+  a = (float *)malloc(size);
+  b = (float *)malloc(size);
+  c = (float *)malloc(size);
+
+  // Initialize the host vectors
+  for (int i = 0; i < N; i++) {
+    a[i] = i;
+    b[i] = 2 * i;
+  }
+
+  // Allocate memory on the device
+  cudaMalloc(&d_a, size);
+  cudaMalloc(&d_b, size);
+  cudaMalloc(&d_c, size);
+
+  // Copy the host vectors to the device
+  cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
+
+  // Launch the kernel
+  int threads_per_block = 256;
+  int blocks_per_grid = (N + threads_per_block - 1) / threads_per_block;
+  add_vectors<<<blocks_per_grid, threads_per_block>>>(d_a, d_b, d_c);
+
+  // Copy the result back to the host
+  cudaMemcpy(c, d_c, size, cudaMemcpyDeviceToHost);
+
+  // Verify the result
+  for (int i = 0; i < N; i++) {
+    if (c[i] != a[i] + b[i]) {
+      printf("Error: c[%d] = %f, should be %f\n", i, c[i], a[i] + b[i]);
+      break;
+    }
+  }
+
+  // Free memory
+  free(a);
+  free(b);
+  free(c);
+  cudaFree(d_a);
+  cudaFree(d_b);
+  cudaFree(d_c);
+
+  return 0;
+}
